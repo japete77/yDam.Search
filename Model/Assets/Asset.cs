@@ -5,7 +5,6 @@ using System.Runtime.CompilerServices;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
 using yDevs.Shared.Serializers;
 
 namespace yDam.Dam.Model.Assets
@@ -20,7 +19,7 @@ namespace yDam.Dam.Model.Assets
         private decimal _permissions;
         private DateTime? _last_update_date;
         private string _last_update_user;
-        private asset_type _asset_type;
+        private string _asset_type;
         private ObservableCollection<string> _parent_folder;
         private object _model;
 
@@ -128,8 +127,7 @@ namespace yDam.Dam.Model.Assets
 
         [BsonElement("asset_type")]
         [JsonProperty("asset_type", Required = Required.Always)]
-        [JsonConverter(typeof(StringEnumConverter))]
-        public asset_type AssetType
+        public string AssetType
         {
             get { return _asset_type; }
             set 

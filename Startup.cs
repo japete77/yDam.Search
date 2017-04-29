@@ -13,6 +13,7 @@ using yDevs.Services.Logger;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Microsoft.Extensions.Options;
+using yDam.Services.Models;
 
 namespace yDevs.Dam
 {
@@ -39,6 +40,7 @@ namespace yDevs.Dam
             services.AddScoped(typeof(IAssetService), typeof(AssetService));
             services.AddScoped(typeof(IHttpContextAccessor), typeof(HttpContextAccessor));
             services.AddScoped(typeof(LoggingFilter), typeof(LoggingFilter));
+            services.AddScoped(typeof(IModelsService), typeof(ModelsService));
 
             // Application config
             services.Configure<AppSettings>(Configuration.GetSection("AppSettings"));
@@ -66,7 +68,13 @@ namespace yDevs.Dam
             });            
 
             // Enable CORS
-            services.AddCors();            
+            services.AddCors(options =>
+                options.AddPolicy("CorsPolicy",
+                    builder => builder.AllowAnyOrigin()
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()
+                    .AllowCredentials())   
+            );            
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -76,9 +84,10 @@ namespace yDevs.Dam
             loggerFactory.AddSerilog();            
      
             app.UseHttpException();
+
+            app.UseStaticFiles();
             
-            app.UseCors(builder => 
-                builder.WithOrigins(settings.Value.AllowCORS.ToArray()));
+            app.UseCors("CorsPolicy");
             
             if (settings.Value.EnableSwagger)
             {

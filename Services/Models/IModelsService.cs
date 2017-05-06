@@ -1,3 +1,4 @@
+using System.IO;
 using yDevs.Model.MetadataModel;
 
 namespace yDam.Services.Models
@@ -6,6 +7,7 @@ namespace yDam.Services.Models
     {
         MetadataModel[] GetModels();
         string GetModelsJson();
+        Stream GetModelsZip();
         void SaveModels(MetadataModel[] models);
     }
 }

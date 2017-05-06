@@ -1,5 +1,5 @@
 using System;
-using System.Text;
+using System.IO;
 using Microsoft.AspNetCore.Mvc;
 using yDam.Services.Models;
 using yDevs.Model.MetadataModel;
@@ -30,16 +30,25 @@ namespace yDam.Dam.Controllers
         }
 
         [HttpGet]
-        public void Export() 
+        public FileStreamResult Export()
         {
             string models = _modelsService.GetModelsJson();
-            var byteArray = Encoding.UTF8.GetBytes(models);
             var date = DateTime.Now.ToString("yyyyMMdd_HHmmss");
 
-            HttpContext.Response.ContentType = "application/octet-stream";
-            HttpContext.Response.ContentLength = byteArray.Length;
-            HttpContext.Response.Headers.Add("Content-Disposition", $"attachment; filename=\"model_{date}.json\"");
-            HttpContext.Response.Body.Write(byteArray, 0, byteArray.Length);
+            return new FileStreamResult(_modelsService.GetModelsZip(), "application/octet-stream")
+            {
+                FileDownloadName = $"models_{date}.zip"
+            };
+        }
+
+        private Stream GenerateStreamFromString(string s)
+        {
+            MemoryStream stream = new MemoryStream();
+            StreamWriter writer = new StreamWriter(stream);
+            writer.Write(s);
+            writer.Flush();
+            stream.Position = 0;
+            return stream;
         }
     }
 }

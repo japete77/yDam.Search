@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -40,6 +42,34 @@ namespace yDam.Services.Models
                 new JsonSerializerSettings { 
                     NullValueHandling = NullValueHandling.Ignore
                 });
+        }
+
+        public Stream GetModelsZip()
+        {
+            var memoryStream = new MemoryStream();
+
+            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
+            {
+                var models = _modelsCollection.Find<MetadataModel>(x => true).ToList();
+                foreach(var m in models)
+                {
+                    var jsonModel = JsonConvert.SerializeObject(m, 
+                        Formatting.Indented,
+                        new JsonSerializerSettings { 
+                            NullValueHandling = NullValueHandling.Ignore
+                        });
+
+                    var file = archive.CreateEntry($"{m.Type}.json");
+                    using (var entryStream = file.Open())
+                    using (var streamWriter = new StreamWriter(entryStream))
+                    {
+                        streamWriter.Write(jsonModel);
+                    }
+                }
+            }
+
+            memoryStream.Seek(0, SeekOrigin.Begin);
+            return memoryStream;
         }
 
         public void SaveModels(MetadataModel[] models)

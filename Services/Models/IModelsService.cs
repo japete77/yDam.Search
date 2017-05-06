@@ -9,5 +9,6 @@ namespace yDam.Services.Models
         string GetModelsJson();
         Stream GetModelsZip();
         void SaveModels(MetadataModel[] models);
+        void SaveModels(byte[] models);
     }
 }

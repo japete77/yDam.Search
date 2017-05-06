@@ -46,30 +46,31 @@ namespace yDam.Services.Models
 
         public Stream GetModelsZip()
         {
-            var memoryStream = new MemoryStream();
-
-            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
+            using (var memoryStream = new MemoryStream())
             {
-                var models = _modelsCollection.Find<MetadataModel>(x => true).ToList();
-                foreach(var m in models)
+                using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
                 {
-                    var jsonModel = JsonConvert.SerializeObject(m, 
-                        Formatting.Indented,
-                        new JsonSerializerSettings { 
-                            NullValueHandling = NullValueHandling.Ignore
-                        });
-
-                    var file = archive.CreateEntry($"{m.Type}.json");
-                    using (var entryStream = file.Open())
-                    using (var streamWriter = new StreamWriter(entryStream))
+                    var models = _modelsCollection.Find<MetadataModel>(x => true).ToList();
+                    foreach(var m in models)
                     {
-                        streamWriter.Write(jsonModel);
+                        var jsonModel = JsonConvert.SerializeObject(m, 
+                            Formatting.Indented,
+                            new JsonSerializerSettings { 
+                                NullValueHandling = NullValueHandling.Ignore
+                            });
+
+                        var file = archive.CreateEntry($"{m.Type}.json");
+                        using (var entryStream = file.Open())
+                        using (var streamWriter = new StreamWriter(entryStream))
+                        {
+                            streamWriter.Write(jsonModel);
+                        }
                     }
                 }
-            }
 
-            memoryStream.Seek(0, SeekOrigin.Begin);
-            return memoryStream;
+                memoryStream.Seek(0, SeekOrigin.Begin);
+                return memoryStream;
+            }
         }
 
         public void SaveModels(MetadataModel[] models)
@@ -81,6 +82,30 @@ namespace yDam.Services.Models
                     this._modelsCollection.UpdateOne(u => u.Type == model.Type, 
                         Builders<MetadataModel>.Update.Set(u => u.Asset, model.Asset), 
                         new UpdateOptions { IsUpsert = true });
+                }
+            }
+        }
+
+        public void SaveModels(byte[] models)
+        {
+            using (var memoryStream = new MemoryStream())
+            {
+                memoryStream.WriteAsync(models, 0, models.Length);
+                memoryStream.Seek(0, SeekOrigin.Begin);
+                using (var zip = new ZipArchive(memoryStream, ZipArchiveMode.Read))
+                {
+                    foreach(var entry in zip.Entries)
+                    {
+                        using(var stream = entry.Open())
+                        {
+                            using (StreamReader streamReader = new StreamReader(stream))
+                            {
+                                var jsonModel = streamReader.ReadToEnd();
+                                MetadataModel model = JsonConvert.DeserializeObject<MetadataModel>(jsonModel);
+                                SaveModels(new MetadataModel[] { model });
+                            }
+                        }
+                    }
                 }
             }
         }

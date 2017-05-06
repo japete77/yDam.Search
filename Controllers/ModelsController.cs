@@ -1,12 +1,13 @@
 using System;
 using System.IO;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using yDam.Services.Models;
 using yDevs.Model.MetadataModel;
 
 namespace yDam.Dam.Controllers
 {
-    [Route("api/[action]")]
+    [Route("api/[controller]/[action]")]
     public class ModelsController: Controller
     {
         private IModelsService _modelsService;
@@ -16,17 +17,26 @@ namespace yDam.Dam.Controllers
         }
 
         [HttpGet]
-        public MetadataModel[] Models()
+        public MetadataModel[] Get()
         {
             return _modelsService.GetModels();
         }
 
         [HttpPost]
-        public void Models([FromBody] MetadataModel[] models)
+        public void Save(IFormFile file)
         {
-            // var a = models.ToString();
-            // var m = JsonConvert.DeserializeObject<MetadataModel[]>(a);
-            _modelsService.SaveModels(models);
+            //_modelsService.SaveModels(models);
+            if (file == null) throw new Exception("File is null");
+            if (file.Length == 0) throw new Exception("File is empty");
+
+            using (Stream stream = file.OpenReadStream())
+            {
+                using (var binaryReader = new BinaryReader(stream))
+                {
+                    var fileContent = binaryReader.ReadBytes((int)file.Length);
+                    _modelsService.SaveModels(fileContent);
+                }
+            }
         }
 
         [HttpGet]

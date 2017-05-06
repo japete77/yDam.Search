@@ -1,9 +1,11 @@
 using System;
 using System.IO;
+using System.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using yDam.Services.Models;
 using yDevs.Model.MetadataModel;
+using yDevs.Shared.Exceptions;
 
 namespace yDam.Dam.Controllers
 {
@@ -23,18 +25,23 @@ namespace yDam.Dam.Controllers
         }
 
         [HttpPost]
-        public void Save(IFormFile file)
+        public void Update([FromBody] MetadataModel[] models)
         {
-            //_modelsService.SaveModels(models);
-            if (file == null) throw new Exception("File is null");
-            if (file.Length == 0) throw new Exception("File is empty");
+            _modelsService.UpdateModels(models);
+        }
+
+        [HttpPost]
+        public void Import(IFormFile file)
+        {
+            if (file == null) throw new HttpException(HttpStatusCode.InternalServerError, "File is null");
+            if (file.Length == 0) throw new HttpException(HttpStatusCode.InternalServerError, "File is empty");
 
             using (Stream stream = file.OpenReadStream())
             {
                 using (var binaryReader = new BinaryReader(stream))
                 {
                     var fileContent = binaryReader.ReadBytes((int)file.Length);
-                    _modelsService.SaveModels(fileContent);
+                    _modelsService.UpdateModels(fileContent);
                 }
             }
         }

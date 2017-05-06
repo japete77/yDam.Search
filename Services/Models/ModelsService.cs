@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Net;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -8,6 +10,8 @@ using Newtonsoft.Json;
 using yDevs.Config;
 using yDevs.Dam.Services.Database;
 using yDevs.Model.MetadataModel;
+using yDevs.Services.Logger;
+using yDevs.Shared.Exceptions;
 
 namespace yDam.Services.Models
 {
@@ -17,19 +21,21 @@ namespace yDam.Services.Models
         private readonly IMongoDbContext _mongoDbContext;
         private IMongoCollection<MetadataModel> _modelsCollection;
         private readonly AppSettings _settings;
+        private readonly ILoggerService _loggerService;
 
-        public ModelsService(IMongoDbContext mongoDbContext, IOptions<AppSettings> settings)
+        public ModelsService(IMongoDbContext mongoDbContext, IOptions<AppSettings> settings, ILoggerService loggerService)
         {
             _mongoDbContext = mongoDbContext;
             _modelsCollection = _mongoDbContext.Database.GetCollection<MetadataModel>(ModelsCollectionName);
             _settings = settings.Value;
+            _loggerService = loggerService;
         }
 
         public MetadataModel[] GetModels()
         {            
             if (!ExistsModelCollection())
             {
-                this.SaveModels(DefaultModels());
+                this.UpdateModels(DefaultModels());
             }
 
             return _modelsCollection.Find<MetadataModel>(x => true).ToList().ToArray();
@@ -46,34 +52,32 @@ namespace yDam.Services.Models
 
         public Stream GetModelsZip()
         {
-            using (var memoryStream = new MemoryStream())
+            var memoryStream = new MemoryStream();
+            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
             {
-                using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
+                var models = _modelsCollection.Find<MetadataModel>(x => true).ToList();
+                foreach(var m in models)
                 {
-                    var models = _modelsCollection.Find<MetadataModel>(x => true).ToList();
-                    foreach(var m in models)
-                    {
-                        var jsonModel = JsonConvert.SerializeObject(m, 
-                            Formatting.Indented,
-                            new JsonSerializerSettings { 
-                                NullValueHandling = NullValueHandling.Ignore
-                            });
+                    var jsonModel = JsonConvert.SerializeObject(m, 
+                        Formatting.Indented,
+                        new JsonSerializerSettings { 
+                            NullValueHandling = NullValueHandling.Ignore
+                        });
 
-                        var file = archive.CreateEntry($"{m.Type}.json");
-                        using (var entryStream = file.Open())
-                        using (var streamWriter = new StreamWriter(entryStream))
-                        {
-                            streamWriter.Write(jsonModel);
-                        }
+                    var file = archive.CreateEntry($"{m.Type}.json");
+                    using (var entryStream = file.Open())
+                    using (var streamWriter = new StreamWriter(entryStream))
+                    {
+                        streamWriter.Write(jsonModel);
                     }
                 }
-
-                memoryStream.Seek(0, SeekOrigin.Begin);
-                return memoryStream;
             }
+
+            memoryStream.Seek(0, SeekOrigin.Begin);
+            return memoryStream;
         }
 
-        public void SaveModels(MetadataModel[] models)
+        public void UpdateModels(MetadataModel[] models)
         {
             if (models!=null)
             {
@@ -86,26 +90,43 @@ namespace yDam.Services.Models
             }
         }
 
-        public void SaveModels(byte[] models)
+        public void UpdateModels(byte[] models)
         {
             using (var memoryStream = new MemoryStream())
             {
                 memoryStream.WriteAsync(models, 0, models.Length);
                 memoryStream.Seek(0, SeekOrigin.Begin);
-                using (var zip = new ZipArchive(memoryStream, ZipArchiveMode.Read))
+                try
                 {
-                    foreach(var entry in zip.Entries)
+                    using (var zip = new ZipArchive(memoryStream, ZipArchiveMode.Read))
                     {
-                        using(var stream = entry.Open())
+                        foreach(var entry in zip.Entries)
                         {
-                            using (StreamReader streamReader = new StreamReader(stream))
+                            using(var stream = entry.Open())
                             {
-                                var jsonModel = streamReader.ReadToEnd();
-                                MetadataModel model = JsonConvert.DeserializeObject<MetadataModel>(jsonModel);
-                                SaveModels(new MetadataModel[] { model });
+                                using (StreamReader streamReader = new StreamReader(stream))
+                                {
+                                    var jsonModel = streamReader.ReadToEnd();
+                                    
+                                    try
+                                    {
+                                        MetadataModel model = JsonConvert.DeserializeObject<MetadataModel>(jsonModel);
+                                        UpdateModels(new MetadataModel[] { model });
+                                    }
+                                    catch (Exception e)
+                                    {
+                                        this._loggerService.Logger().Error(e.Message);
+                                        throw new HttpException(HttpStatusCode.InternalServerError, "Invalid format. Please review JSON model syntax in the imported file.");
+                                    }
+                                }
                             }
                         }
                     }
+                }
+                catch (InvalidDataException e)
+                {
+                    this._loggerService.Logger().Error(e.Message);
+                    throw new HttpException(HttpStatusCode.InternalServerError, "Invalid file format.");
                 }
             }
         }
